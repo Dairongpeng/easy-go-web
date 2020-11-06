@@ -11,7 +11,7 @@ func main() {
 	// 默认路由
 	engine := gin.Default()
 
-	// 接口1 json返回格式测试
+	// 案例1 json返回格式测试
 	engine.GET("/json-test", func(c *gin.Context) {
 
 		// 方法一：定义一个map，key为string，value为一个空接口，可以接受任意的值类型
@@ -29,6 +29,7 @@ func main() {
 
 	})
 
+	// 案例2 结构体数据返回json
 	// 方法二：结构体。灵活使用tag,也就是字段后``标识，对字段做定制化操作
 	type msg struct {
 		Name string
@@ -36,7 +37,6 @@ func main() {
 		Message string `json:"message"`
 		Age     int
 	}
-	// 接口2 结构体数据返回json
 	engine.GET("/struct-test", func(c *gin.Context) {
 		data := msg{
 			// 注意，当字段首字母小写时，该字段属于不可导出，json序列化使用的是反射，那么小写字母开头的变量无法反射获取。该字段返回不到前端。
@@ -48,7 +48,7 @@ func main() {
 		c.JSON(http.StatusOK, data) // json序列化结构体data
 	})
 
-	// 接口3 前端传?query=hello方式交互。接口为127.0.0.1:8000/query-test?query="hello"
+	// 案例3 前端传?query=hello方式交互。接口为127.0.0.1:8000/query-test?query="hello"
 	engine.GET("/query-test", func(c *gin.Context) {
 
 		// 获取key为query的参数值
@@ -75,7 +75,7 @@ func main() {
 
 	})
 
-	// 接口4 我们先用get请求返回给前端一个表单
+	// 案例4 我们先用get请求返回给前端一个表单
 	engine.LoadHTMLFiles("./login.html", "./index.html")
 	engine.GET("/login", func(c *gin.Context) {
 
@@ -83,7 +83,7 @@ func main() {
 
 	})
 
-	// 接口5 post请求获取请求体的数据, 不使用postman来模仿post请求，用接口4返回给前端的表单来触发post
+	// 案例5 post请求获取请求体的数据, 不使用postman来模仿post请求，用接口4返回给前端的表单来触发post
 	engine.POST("/login", func(c *gin.Context) {
 
 		// 方式1获取form表单的body数据
@@ -111,7 +111,7 @@ func main() {
 
 	})
 
-	// 接口6 获取路径参数 127.0.0.1:8000/get-name/xiaodai/18
+	// 案例6 获取路径参数 127.0.0.1:8000/get-name/xiaodai/18
 	engine.GET("/get-name/:username/:age", func(c *gin.Context) {
 
 		// 获取路径参数
@@ -125,7 +125,7 @@ func main() {
 
 	})
 
-	// 接口7 请求参数和自定义结构体进行绑定。POST 127.0.0.1:8000/login-binding {"username":"xiaodai", "password":"12345"}
+	// 案例7 请求参数和自定义结构体进行绑定。POST 127.0.0.1:8000/login-binding {"username":"xiaodai", "password":"12345"}
 	type UserInfo struct {
 		Username string `json:"username"` // 首字母大写表示可以导出。tag表示导出后显示小写
 		Password string
@@ -146,7 +146,7 @@ func main() {
 		}
 	})
 
-	// 接口7 上传文件
+	// 案例8 上传文件
 	engine.LoadHTMLFiles("./upload.html")
 	engine.GET("/file-page", func(c *gin.Context) {
 		// 返回状态码
@@ -175,6 +175,67 @@ func main() {
 			})
 		}
 	})
+
+	// 案例9 接口重定向
+	// 跳转到别的网站
+	engine.GET("/redirect", func(c *gin.Context) {
+
+		c.Redirect(http.StatusMovedPermanently, "http://www.baidu.com")
+
+	})
+	// 站内跳转
+	engine.GET("/redirect2", func(c *gin.Context) {
+
+		c.Request.URL.Path = "/struct-test" // 把请求的url修改为"/struct-test"
+		engine.HandleContext(c)             // 用重定向后的接口继续处理该次请求
+
+	})
+
+	// 案例10 gin框架中的路由和路由组的概念。
+	// 普通的路由，比如一个请求路径我们对应一个处理函数。常用的GET、POST、PUT、DELETE等
+	// 映射所有请求的路由，比如Any。点进入Any方法，可以看到它封装了各种路由请求，既能处理GET也能处理POST。
+	// 比如下面"/router-test"方法，我们用get请求，和post请求都能识别，也能进入到相应的case分支中去
+	// go语言自带break，每个分支中无需break
+	engine.Any("/router-test", func(c *gin.Context) {
+
+		switch c.Request.Method {
+
+		case "GET":
+			c.JSON(http.StatusOK, gin.H{"method": "GET"})
+		case http.MethodPost:
+			c.JSON(http.StatusOK, gin.H{"method": "POST"})
+
+		}
+	})
+	// 默认路由，当请求服务端不存在的路由地址的时候，默认进入该路由
+	engine.NoRoute(func(c *gin.Context) {
+		c.JSON(http.StatusNotFound, gin.H{"code": "404"})
+	})
+
+	// 路由组的概念，处理路由的前缀相同的请求，进行归类。比如"/user/hello"和"/user/login"同属于"/user"前缀的路由组下
+	// 把公用的前缀提取出来，创建公共的路由组
+	shopGroup := engine.Group("/shop")
+
+	{
+		// 通过路由组GET,实质上url是带上路由组的路径：127.0.0.1:8000/shop/list 和 127.0.0.1:8000/shop/get
+		shopGroup.GET("/list", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"apple": "10元", "brash": "12.66元"})
+		})
+
+		shopGroup.GET("/get", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"apple": "10元"})
+		})
+
+		// 路由组也支持嵌套。用shopGroup("/shop") 嵌套一个新的shopBusGroup("/bus")路由组
+		shopBusGroup := shopGroup.Group("/bus")
+		// "/shop/bus/view"
+		shopBusGroup.GET("/view", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"view": "bingo!"})
+		})
+	}
+
+	// 案例11 中间件，类似于钩子函数，类比于java的切面，拦截器等。golang的中间件函数适合处理一些多个接口公共的功能
+	// 例如处理登录认证，权限检验，数据分页，记录日志，耗时统计等
 
 	engine.Run(":8000")
 
