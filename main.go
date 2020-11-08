@@ -1,10 +1,37 @@
 package main
 
 import (
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"path"
+	"time"
 )
+
+// 案例11的中间件函数
+func m1(c *gin.Context) {
+	fmt.Println("中间件拦截请求=====")
+	// 计时功能(统计请求函数的耗时)
+	start := time.Now()
+	c.Next() // 调用后续的处理函数，这里的后续处理函数是indexHandler
+	//c.Abort() 阻止调用后续函数。常用来拦截阻止后续操作
+	// return 加入return 停止该中间件，后续函数处理结束不会再回到该中间件函数
+	cost := time.Since(start)
+	fmt.Printf("cost:%v\n", cost)
+}
+
+// 案例11的全局中间件函数m2
+func m2(c *gin.Context) {
+	// 是否是登录用户
+	// if 是登录用户
+	// c.Next()
+	// 不是登录用户
+	// c.Abort()
+}
+
+func indexHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"test": "ok"})
+}
 
 func main() {
 
@@ -236,6 +263,16 @@ func main() {
 
 	// 案例11 中间件，类似于钩子函数，类比于java的切面，拦截器等。golang的中间件函数适合处理一些多个接口公共的功能
 	// 例如处理登录认证，权限检验，数据分页，记录日志，耗时统计等
+	// 例如我们网站有"/index","/user","/shop"等路由组前缀
+	// 1. 定义中间间函数，上文main函数外
+	// 2. 定义处理函数，上文main函数外
+	// 3.为接口添加中间件函数m1
+	engine.GET("/index", m1, indexHandler)
+	// 定义全局注册函数m2。此时不管什么接口，都会被该中间件函数拦截。部分有共性的接口使用一个中间件，可以运用路由组。
+	// 可以engine.Use(m1,m2)注册多个全局中间件。多个全局中间件支持重入。例如m1和m2中间件，m1拦截->执行后续处理函数->m2->执行后续处理函数->index->m2结束->m1结束
+	// engine.Use(m2)
+	// c := gin.Default() 中默认包含了log和recovery两个中间件。如果想要一个不包含任何中间件的服务端，可以使用gin.New()
+	// 其中log是日志中间件，服务启动或者报错会打印日志；recovery是错误处理，系统报错gin为cover住错误，报相应的状态码，例如500
 
 	engine.Run(":8000")
 
