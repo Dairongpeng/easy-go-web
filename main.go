@@ -3,6 +3,9 @@ package main
 import (
 	"fmt"
 	"github.com/gin-gonic/gin"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 	"net/http"
 	"path"
 	"time"
@@ -273,6 +276,149 @@ func main() {
 	// engine.Use(m2)
 	// c := gin.Default() 中默认包含了log和recovery两个中间件。如果想要一个不包含任何中间件的服务端，可以使用gin.New()
 	// 其中log是日志中间件，服务启动或者报错会打印日志；recovery是错误处理，系统报错gin为cover住错误，报相应的状态码，例如500
+
+	// 案例12 gorm
+	// 定义结构体用来和数据库表做对应。在gorm中默认会把大驼峰变下划线连接，单数变复数。和数据库中的表做对应。
+	// 例如插入下面这个结构体的数据，gorm会和数据库中的users做映射。如果结构体为UserInfo。对应的表为user_infos
+	// 后续可以自己定义映射。由于我们结构体为User，我们先在数据库db1中创建一张users的表，字段定义同结构体
+	//type User struct {
+	//	ID uint
+	//	Name string
+	//	Gender uint
+	//	Hobby string
+	//}
+
+	dsn := "root:abc123@tcp(127.0.0.1:3306)/db1?charset=utf8mb4&parseTime=True&loc=Local"
+	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
+		NamingStrategy: schema.NamingStrategy{
+			TablePrefix:   "t_", // 表名前缀，`User` 的表名应该是 `t_users`
+			SingularTable: true, // 使用单数表名，启用该选项，此时，`User` 的表名应该是 `t_user`
+		},
+	})
+
+	if err != nil {
+		// 如果连接不上，终止程序
+		panic(err)
+	}
+
+	// 1. 创建一条新记录插入到数据库中。
+	//user := User{1, "xiaodai", 18, "cat"}
+	//db.Create(&user)
+
+	// 2. 查询表中第一条记录，映射到u上
+	//var u User
+	//db.First(&u)
+	//fmt.Printf("u:%v\n", u)
+	//// 3. 更新
+	//db.Model(&u).Update("hobby", "双色球")
+	//fmt.Printf("u:%v\n", u)
+
+	// 4. 删除记录。这里的u是上文查询出来的那条记录
+	//db.Delete(&u)
+
+	// 案例13 orm中定义模型。由于go语言支持模型嵌套，这里我们嵌套一个gorm的基础model
+	//type Student struct {
+	//	gorm.Model
+	//	Name string
+	//}
+
+	// 数据模型同步方式创建students表。gorm中默认使用id作为主键，如果模型嵌套了model。使用module里面的id作为主键
+	// 如果我们没使用嵌套module。那么只要我们的结构体中有id字段，那么orm框架会指定id为主键
+	// 如果想指定别的字段为主键，可以使用tag。在字段后面加上`gorm:"primary_key"`
+	// 由于上文的db的配置中，指定了表名前缀和不使用复数。创建的表名为：t_student
+	// 在我们使用gorm.module里面的字段时，我们增加记录修改记录，都会记录相应的时间。我们的删除记录会保存删除时间。grom查询记录的时候，会默认查删除时间为空的记录
+
+	// db.AutoMigrate(&Student{})
+
+	//db.Create(&Student{
+	//	Model: gorm.Model{},
+	//	Name:  "xiaodai",
+	//})
+
+	// 案例14 gorm框架的 的crud
+	// 1. 定义模型。使用tag来标识如果没指定Name属性，使用默认值
+	type User struct {
+		ID   uint
+		Name string `gorm:"default:'default'"`
+		Age  int64
+	}
+
+	// 模型映射
+	db.AutoMigrate(&User{})
+
+	// 1、创建一条记录, 主键不用指定，自增
+	//u := User{Name:"lisi", Age:18}
+	//// 传入u也是可以的，但是如果结构体比较大，值拷贝没有直接内存地址引用快。
+	//// 在进行数据库操作之前，调用Debug。那么会把sql打印出来
+	//db.Debug().Create(&u)
+
+	// 2、查询
+	var user User      // 生命结构体变量user
+	user1 := new(User) // new和make的区别，make是为channel等系统接口开辟内存用的。new是为基本数据类型或者结构体开辟内存用的，返回值是一个指针
+	var users []User
+	var user2 User
+	var user3 []User
+	var user4 User
+	var user5 []User
+	var user6 []User
+	var user7 User
+	var user8 []User
+	var user9 []User
+	// 一般查询
+	// db.First(&u) 根据主键查询第一条记录 select * from t_user order by id asc limit 1
+	// db.Take(&u) 随机获取一条数据 select * from t_user limit 1
+	// db.Last(&u) 根据主键查询最后一条记录 select * from t_user order by id desc limit 1
+	// db.Find(&u) 查询所有的记录 select * from t_user
+	// db.First(&u, 10) 查询指定的某条记录(仅当主键为整形时可用) select * from t_user where id = 10
+	db.Debug().First(&user)
+	fmt.Printf("user:%#v\n", user)
+	db.Debug().First(user1)
+	db.Debug().Find(&users)
+	fmt.Printf("user:%#v\n", users)
+
+	// 带where的查询。
+	// where会默认忽略零值的查询，如果不让gorm忽略零值。可以在模型中定义为指针类型的变量，例如Age *int64。
+	// 或者在模型中加入sql.NullInt64，sql.NullInt64实现了Scanner/Value接口
+	db.Debug().Where("id = ?", 1).First(&user2)
+	db.Debug().Where("name in (?)", []string{"zhangsan", "lisi"}).Find(&user3)
+	fmt.Printf("user3:%#v\n", user3)
+	db.Debug().Where(&User{Name: "zhangsan", Age: 18}).Find(&user4) // 查姓名为zhangsan，年龄为18岁的人
+	fmt.Printf("user4:%#v\n", user4)
+
+	// 带Not的查询。where是指定哪些条件，Not是排除哪些条件。和where很相似
+	db.Debug().Not("id", 1).Find(&user5)
+	fmt.Printf("user5:%#v\n", user5)
+
+	// Or条件查询
+	db.Debug().Where("id", 1).Or("name", "zhangsan").Find(&user6)
+	fmt.Printf("user6:%#v\n", user6)
+
+	// 内联条件,内联条件不会传递给后面的立即执行方法
+	db.Debug().First(&user7, "name = ?", "zhangsan")
+	fmt.Printf("user7:%#v\n", user7)
+
+	// 选择字段查询
+	db.Select("name").Find(&user8)
+	fmt.Printf("user8:%#v\n", user8)
+
+	// 限制查询
+	db.Debug().Limit(1).Find(&user9)
+	fmt.Printf("user9:%#v\n", user9)
+
+	// 更多高级查询(嵌套，关联，having，group，链式条件等)，参考grom.io官方文档
+
+	// 3、更新
+	// db.Save() // 全量更新模型中的所有字段，即使没有给模型中的某些字段赋值
+	// 如果只是想更新个别字段，可以使用db.Update()或者db.Updates()。
+	// db.Module(&user).Update("name", "hello")
+	// db.Module(&user).Updates(User{Name:"hello", Age:16})
+	// db.Module(User{}).Updates(User{Name:"hello", Age:16}).RowsAffected  // 返回更新操作影响的行数
+
+	// 4、删除 gorm默认使用软删除，当我们拼装了model模型，我们的删除操作只会记录一个删除时间DeleteTime。
+	// 当我们查询的时候，只会查删除时间为空的记录。保证删除传入的结构体的主键要有值
+	// db.Delete(&user9)
+	// 物理删除
+	// db.Debug().Unscoped().Where("name","zhangsan").Delete(User{})
 
 	engine.Run(":8000")
 
