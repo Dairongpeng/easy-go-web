@@ -1,0 +1,36 @@
+1、安装protobuf
+
+brew install protobuf
+
+2、go版本语言生成器安装，根据proto文件，生成代码
+
+go get -u github.com/golang/protobuf/protoc-gen-go
+
+3、编写proto文件，定义消息请求，消息响应，服务等信息，helloworld.proto, 例如
+
+syntax = "proto3";  //语法声明
+
+package helloworld; //包名
+
+// Greeter 微服务
+service Greeter {
+  // Sends a greeting
+  rpc SayHello (HelloRequest) returns (HelloReply) {}
+}
+
+// HelloRequest 请求数据格式
+message HelloRequest {
+  string name = 1;
+}
+
+// HelloReply 响应数据格式
+message HelloReply {
+  string message = 1;
+}
+
+
+4、保存，然后用生成器生成代码
+
+protoc --go_out=plugins=grpc:. helloworld.proto
+
+5、根据生成的代码，编写服务端和客户端的代码
